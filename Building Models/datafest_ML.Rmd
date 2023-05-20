@@ -12,10 +12,12 @@ library(lubridate)
 library(ggplot2)
 library(dplyr)
 library(readxl)
+library(caret)
+library(groupdata2)
 ```
 
 ```{r}
-aba_data <- read.csv("/Users/anh.vo/Downloads/School/datafest2023/data/datasetABA.csv") 
+aba_data <- read.csv("/Users/anh.vo/Downloads/School/ABA Client Analysis/data/datasetABA.csv") 
 ```
 
 ```{r}
@@ -57,19 +59,12 @@ aba <- na.omit(aba)
 ```
 
 
-```{r}
+```{}
 ggplot(aes(x = StateAbbr, fill = StateAbbr), data = aba) +
   geom_bar(stat= "count") +
   geom_text(stat = "count", aes(label = after_stat(count)), vjust = -1, size = 4) +
   labs(x = "Race", y = "Count", title = "Race Distribution", subtitle = "Of Patients Who Were Admitted to the Hospital", fill = "Race") +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
-```
-
-
-```{r}
-test <- aba %>%
-  group_by(EthnicIdentity) %>%
-  summarize(Race = n())
 ```
 
 
@@ -118,13 +113,76 @@ aba <- aba %>%
 ```
 
 
+```{r}
+cor(aba[, c(8,9)])
+```
+
+```{r}
+aba <- aba %>%
+  mutate(Category = case_when(Category == "Family and Children" ~ "Family and Children",
+                              Category %in% c("Juvenile", "Education", "Individual Rights",
+                                              "Consumer Financial Questions",
+                                              "Income Maintenance", "Heath and Disability",
+                                              "Work, Employment and Unemployment") ~ "Social Welfare and Economic Empowerment", 
+                              TRUE ~ "Shelter and Other Residential Concerns"))
+```
+
 
 
 ########################################################################
 
 
+```{r}
+data <- aba %>% sample_frac(0.1)
+trainIndex <- sample(nrow(data), 0.8*nrow(data))
+train <- data[trainIndex, ]
+test <- data[-trainIndex, ]
+
+low <- min(table(train$Category))
+size <- round(min(max(table(train$Category)), low/2 + low),0)
+
+train <- balance(
+  data = train,
+  size = size,
+  cat_col = "Category",
+  mark_new_rows = TRUE
+)
+
+train <- train[, -c(13)]
+```
 
 
+```{r}
+enet <- train(Category ~.,
+              data = train,
+              method = "glmnet", 
+              trControl = trainControl(method = "cv", 5),
+              preProcess = c("center", "scale"),
+              tuneGrid = expand.grid(alpha = seq(0,1,by = 0.2),
+                                     lambda = seq(0, 0.1, by = 0.02)))
+enet
 
+plot(varImp(enet))
+```
 
+```{r}
+rf <- train(Category ~ .,
+                   data=train,
+                   method="rf",
+                   trControl=trainControl("oob"),
+                   tuneGrid=data.frame(mtry=1:11),
+                   ntree=50)
+```
+
+```{r, warning = F, message =F}
+cnn <- train(Category ~ .,
+                data=train,
+                method="nnet",
+                trControl=trainControl("cv",5),
+                tuneGrid=expand.grid(size = c(1:5),
+                                     decay=seq(0, 1, by = 0.2)),
+             trace = T)
+
+cnn
+```
 
