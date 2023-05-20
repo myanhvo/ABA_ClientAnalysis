@@ -1,0 +1,130 @@
+---
+title: "datafest_ML"
+author: "Anh Vo"
+date: "2023-05-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(broom)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+library(readxl)
+```
+
+```{r}
+aba_data <- read.csv("/Users/anh.vo/Downloads/School/datafest2023/data/datasetABA.csv") 
+```
+
+```{r}
+aba_data <- aba_data %>%
+  mutate_all(~ if_else(. %in% c("", " ", "NULL", "Not Available"), NA, .)) 
+
+aba <- aba_data %>%
+  select(-X, -AskedByClientUno, -CategoryUno, -SubcategoryUno, -TakenByAttorneyUno, -ClosedByAttorneyUno, -LegalDeadline, -Conversation, -PostalCode, -ClosedOnUtc, -Subcategory, -County, -Imprisoned, -BaseIncomeLimit, -PerHouseholdMemberIncomeLimit)
+
+df <- data.frame(colSums(is.na(aba)))
+
+df <- df %>%
+  mutate(`Missing Percentage`= round(colSums.is.na.aba..*100/nrow(aba), 6)) %>%
+  arrange(desc(`Missing Percentage`)) %>%
+  mutate(`Missing Percentage` = paste(`Missing Percentage`, "%")) %>%
+  select(-colSums.is.na.aba..)
+
+aba <- aba %>%
+   select(-InvestmentsBalance, -SavingsBalance, -CheckingBalance)
+```
+
+
+```{r}
+aba <- aba %>%
+  mutate(Gender = case_when(Gender == "Female" ~ "Female",
+                            Gender == "Male" ~ "Male",
+                            TRUE ~ "Other")) %>%
+  mutate(Age = as.numeric(Age))
+
+aba <- aba %>%
+  mutate(Age = case_when(Age < 30 & Age >= 0 ~ "[< 29]", 
+                         Age < 40 & Age >= 30 ~ "[30-39]", 
+                         Age < 50 & Age >= 40 ~ "[40-49]", 
+                         Age < 60 & Age >= 50 ~ "[50-59]", 
+                         Age < 110 & Age >= 60 ~ "[60+]",
+                         TRUE ~ "Other"))
+
+aba <- na.omit(aba)
+```
+
+
+```{r}
+ggplot(aes(x = StateAbbr, fill = StateAbbr), data = aba) +
+  geom_bar(stat= "count") +
+  geom_text(stat = "count", aes(label = after_stat(count)), vjust = -1, size = 4) +
+  labs(x = "Race", y = "Count", title = "Race Distribution", subtitle = "Of Patients Who Were Admitted to the Hospital", fill = "Race") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+
+```{r}
+test <- aba %>%
+  group_by(EthnicIdentity) %>%
+  summarize(Race = n())
+```
+
+
+```{r}
+library(stringr)
+aba <- aba %>%
+  mutate(Race = case_when(str_detect(EthnicIdentity, "^Africa") ~ "African",
+                          str_detect(EthnicIdentity, "^(Asian|Arab|East)") ~ "Asian",
+                          str_detect(EthnicIdentity, "^Not") ~ "Not Hispanics or Latinx",
+                          str_detect(EthnicIdentity, "^(Hispanic|Latino)") ~ "Hispanics or Latinx",
+                          str_detect(EthnicIdentity, "^Caucasian") ~ "Caucasian",
+                          TRUE ~ "Other (Native, Slavic, Unidentified)"
+  )) %>%
+  select(-EthnicIdentity)
+```
+
+
+```{r}
+aba <- aba %>%
+  mutate(MaritalStatus = case_when(str_detect(MaritalStatus, "^(Divorced|Widowed)") ~ "Divorced or Widowed",
+                          str_detect(MaritalStatus, "^Married") ~ "Married or Remarried",
+                          str_detect(MaritalStatus, "^Single") ~ "Single",
+                          str_detect(MaritalStatus, "^Separated") ~ "Separated",
+                          TRUE ~ "Other"
+  )) 
+```
+
+
+```{r}
+aba <- aba %>%
+  mutate(NumberInHousehold = as.numeric(NumberInHousehold)) %>%
+  mutate(NumberInHousehold = case_when(NumberInHousehold == 1 ~ "1", 
+                                       NumberInHousehold == 2 ~ "2", 
+                                       NumberInHousehold == 3 ~ "3", 
+                                       NumberInHousehold == 4 ~ "4", 
+                                       TRUE ~ "5+"))
+```
+
+
+```{r}
+aba <- aba %>%
+  mutate(AnnualIncome = as.numeric(AnnualIncome),
+         AllowedIncome = as.numeric(AllowedIncome),
+         AllowedAssets = as.character(AllowedAssets),
+         IncomeMultiplier = as.character(IncomeMultiplier))
+```
+
+
+
+
+########################################################################
+
+
+
+
+
+
+

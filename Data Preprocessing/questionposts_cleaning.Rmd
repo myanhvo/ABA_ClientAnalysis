@@ -1,0 +1,74 @@
+---
+title: "datafest23"
+author: "Anh Vo"
+date: "2023-04-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lubridate)
+```
+
+
+```{r}
+# read in the file as a character vector
+lines <- readLines("/Users/anh.vo/Downloads/DataFest 2023 Data For Distribution/data/questionposts.csv")
+
+# skip the first line
+lines <- lines[-1]
+
+# split each line by commas
+data <- lapply(lines, function(x) {
+  # split the line by commas
+  fields <- strsplit(x, ",", fixed = FALSE)[[1]]
+
+  # concatenate the conversation fields
+  if(length(fields) > 4) {
+    conv <- paste(fields[4:(length(fields)-1)], collapse = ",")
+  } else {
+    conv <- ""
+  }
+  
+  # remove extra quotes from date field
+  date_field <- gsub("\"", "", fields[length(fields)])
+  
+  # return the fields as a list
+  list(num = as.numeric(fields[1]),
+       char = as.character(fields[2]),
+       enc = fields[3],
+       conv = conv,
+       date = as.POSIXct(date_field, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
+})
+
+# unlist each element of the data list
+data <- lapply(data, unlist)
+
+# convert the list to a data frame
+df <- do.call(rbind, data)
+```
+
+```{r}
+df2 <- as.data.frame(df)
+
+# convert date column to POSIXct
+df2$date <- as.POSIXct(as.numeric(df2$date), origin = "1970-01-01")
+
+names(df2) <- c("Id", "State", "EncodedQues", "Conversation", "Time")
+```
+
+
+```{r}
+finaldata <- subset(df2, State %in% state.abb)
+```
+
+```{r}
+write.csv(finaldata, "questionposts_cleaned.csv", row.names = F)
+```
+
+```{r}
+temp <- read.csv("questionposts_cleaned.csv", header = T)
+```
+
+
+

@@ -1,0 +1,260 @@
+---
+title: "Datafest 2023"
+author: "Thai Huynh"
+date: "2023-04-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dbplyr)
+library(caret)
+library(tree)
+library(ggplot2)
+library(MASS)
+library(knitr)
+library(elasticnet)
+library(glmnet)
+library(psych)
+library(randomForest)
+```
+
+
+### The client information data set
+
+```{r}
+client <- read.csv("/Users/anh.vo/Downloads/datafest2023/data/datasetABA.csv") 
+```
+
+
+```{r}
+drop <- c("CategoryUno", "SubcategoryUno", "X")
+client <-  client[,!(names(client) %in% drop)]
+glimpse(client)
+```
+
+
+
+### Variable appendix
+
+AnnualIncome : Estimated annual income for the client's household
+
+AllowedIncome: State's calculated allowed income to determine eligibility based on the client's annual income.
+
+AskedByClientUno: Unique identifier for the client who submitted the question
+
+ClosedOnUtc : UTC date/time stamp indicating when the client's question was closed
+
+LegalDeadline : Court date or other legal deadline related to the client question
+
+AllowedAssests: State's limit for the total allowed amount for all accounts (checking, savings, etc.)
+
+BaseIncomeLimit: Base amount used for determining a client's eligibility based on income
+
+PerHouseholdMemberIncomeLimit : Additional amount allowed per household member used for determining a client's eligibility based on income
+
+IncomeMultiplier: Income multiplier used for determining client's eligibility based on income
+
+
+```{r}
+client1 <- client %>%
+  mutate(AnnualIncome=as.numeric(AnnualIncome),
+            AllowedIncome=as.numeric(AllowedIncome),
+            CheckingBalance=as.numeric(CheckingBalance),
+            SavingsBalance=as.numeric(SavingsBalance),
+            InvestmentsBalance=as.numeric(InvestmentsBalance),
+            Age=as.numeric(Age),
+            NumberInHousehold=as.numeric(NumberInHousehold))
+```
+
+
+
+```{r}
+glimpse(client1)
+```
+
+
+```{r}
+drop <- c("PostalCode")
+client1 <-  client1[,!(names(client1) %in% drop)]
+```
+
+
+### Model
+
+```{r}
+library(mosaic)
+# select numeric variables
+df <- dplyr::select_if(client1, is.numeric)
+
+# calulate the correlations
+r <- cor(df, use="complete.obs")
+round(r,2)
+```
+
+```{}
+test <- lm(Category ~ ., data = client)
+summary(test)
+```
+
+
+
+AllowedIncome - NumberInHousehold
+
+AllowedAssets - IncomeMultiplier
+
+
+
+```{r}
+drop <- c("CheckingBalance", "SavingsBalance", "InvestmentsBalance")
+client2 <-  client1[,!(names(client1) %in% drop)]
+```
+
+
+**Predict the LSC category based on the client's demographic** 
+
+Variables of interest: Category, StateAbbr, EthnicIdentity, Age, Gender, MaritalStatus, Veteran, Imprisoned, NumberInHousehold, AnnualIncome
+
+
+
+```{r}
+client3 <- client2 %>% replace(.=="NULL", "I'd rather not answer") # replace NULL
+```
+
+
+```{r}
+client3 <- client3 %>% replace(.=="NA", "I'd rather not answer") # replace NA
+```
+
+
+```{r}
+client3 <- client3 %>% replace(.=="", "I'd rather not answer") # Replace Blank
+```
+
+
+```{r}
+client3 <- client3 %>% 
+  mutate(TakenByAttorneyUno = ifelse(TakenByAttorneyUno == "I'd rather not answer", "None", TakenByAttorneyUno),
+         ClosedByAttorneyUno = ifelse(ClosedByAttorneyUno == "I'd rather not answer", "None", ClosedByAttorneyUno))
+```
+
+
+```{r}
+client3 <- client3 %>%
+  mutate(GetReplied = ifelse(TakenByAttorneyUno=="None", "No", "Yes"))
+```
+
+
+```{r}
+client3 <- client3 %>% drop_na()
+```
+
+------------------------------------------------------------------
+
+
+```{r}
+glimpse(client3)
+```
+
+```{r}
+client3 <- client3 %>%
+  mutate(AllowedAssets = as.character(AllowedAssets),
+         BaseIncomeLimit = as.character(BaseIncomeLimit),
+         PerHouseholdMemberIncomeLimit = as.character(PerHouseholdMemberIncomeLimit),
+         IncomeMultiplier = as.character(IncomeMultiplier)) %>%
+    dplyr::select(-Conversation, -ClosedOnUtc, -AskedByClientUno, -TakenByAttorneyUno, -ClosedByAttorneyUno, -LegalDeadline)
+```
+
+
+```{r}
+# Get a random sample from the large data set
+client.sample1 <- client3[sample(nrow(client3), size = nrow(client3)*0.01), ]
+```
+
+
+### Classification Tree
+
+```{r}
+set.seed(41523)
+categoryTree <- train(Category ~ .,
+                   data = client.sample1,
+                   method="rpart", # rpart2 if using maxdepth
+                   trControl=trainControl("CV",5)) 
+    
+categoryTree
+```
+
+
+```{r}
+plot(categoryTree$finalModel, margin=0.015)
+text(categoryTree$finalModel, cex=0.45)
+```
+
+
+### LASSO
+
+```{r}
+# Train the LASSO model
+category_lasso <- train( Category ~ StateAbbr + EthnicIdentity + Age + Gender + MaritalStatus + Veteran + NumberInHousehold + AnnualIncome + GetReplied,
+                      data=client.sample1,
+                      method="glmnet", # use glmnet package
+                      trControl=trainControl(method="cv", 5), # 5-fold cross-validation
+                      preProcess=c("center", "scale"),
+                      tuneGrid = expand.grid(alpha=1, lambda=seq(0, 0.1, by=0.01)))
+# The model output
+category_lasso
+```
+
+
+```{r}
+# Best model coefficients
+coef(category_lasso$finalModel, category_lasso$bestTune$lambda)
+```
+
+
+
+### Ridge Regression
+
+
+```{r}
+# Train the Ridge Regression model
+category_ridge <- train(Category ~ StateAbbr + EthnicIdentity + Age + Gender + MaritalStatus + Veteran + NumberInHousehold + AnnualIncome + GetReplied,
+                      data=client.sample1,
+                      method="glmnet", # use glmnet package
+                      trControl=trainControl(method="cv", 5), # 5-fold cross-validation
+                      preProcess=c("center", "scale"),
+                      tuneGrid = expand.grid(alpha=0, lambda=seq(0, 0.1, by=0.01)))
+# The model output
+category_ridge
+```
+
+
+```{r}
+# Best model coefficients
+coef(category_ridge$finalModel, category_ridge$bestTune$lambda)
+```
+
+
+
+### Enet
+
+```{r}
+# Train the elastic net model
+category_enet <- train(Category ~ StateAbbr + EthnicIdentity + Age + Gender + MaritalStatus + Veteran + NumberInHousehold + AnnualIncome + GetReplied,
+                   data=client.sample1,
+                   method = "glmnet",
+                   trControl = trainControl(method="cv", 5), # 5-fold cross-validation
+                   preProcess = c("center", "scale"),
+                   tuneGrid = expand.grid(alpha=seq(0, 1, by=0.1),
+                                          lambda=seq(0, 0.1, by=0.01)))
+# Model output
+category_enet              
+```
+
+```{r}
+# Best model coefficients
+coefficients(category_enet$finalModel, category_enet$bestTune$lambda)
+```
+
+
