@@ -14,6 +14,11 @@ library(dplyr)
 library(readxl)
 library(caret)
 library(groupdata2)
+library(rpart)
+library(rpart.plot)
+library(Metrics)
+library(mlr)
+set.seed(05202023)
 ```
 
 ```{r}
@@ -133,7 +138,9 @@ aba <- aba %>%
 
 
 ```{r}
-data <- aba %>% sample_frac(0.1)
+set.seed(05202023)
+
+data <- aba %>% sample_frac(0.01)
 trainIndex <- sample(nrow(data), 0.8*nrow(data))
 train <- data[trainIndex, ]
 test <- data[-trainIndex, ]
@@ -153,7 +160,7 @@ train <- train[, -c(13)]
 
 
 ```{r}
-enet <- train(Category ~.,
+enet <- caret::train(Category ~.,
               data = train,
               method = "glmnet", 
               trControl = trainControl(method = "cv", 5),
@@ -161,28 +168,223 @@ enet <- train(Category ~.,
               tuneGrid = expand.grid(alpha = seq(0,1,by = 0.2),
                                      lambda = seq(0, 0.1, by = 0.02)))
 enet
-
-plot(varImp(enet))
+enet_pred <- predict(enet, newdata = test, type="raw")
+mcr_enet <- mean(test$Category != enet_pred)
 ```
 
 ```{r}
-rf <- train(Category ~ .,
+rf <- caret::train(Category ~ .,
                    data=train,
                    method="rf",
                    trControl=trainControl("oob"),
                    tuneGrid=data.frame(mtry=1:11),
                    ntree=50)
+rf_pred <- predict(rf, newdata = test, type="raw")
+mcr_rf <- mean(test$Category != rf_pred)
 ```
 
 ```{r, warning = F, message =F}
-cnn <- train(Category ~ .,
+cnn <- caret::train(Category ~ .,
                 data=train,
                 method="nnet",
                 trControl=trainControl("cv",5),
-                tuneGrid=expand.grid(size = c(1:5),
-                                     decay=seq(0, 1, by = 0.2)),
+                tuneGrid=expand.grid(size = c(2,5,6),
+                                     decay=seq(0.6, 1, by = 0.2)),
              trace = T)
 
 cnn
+cnn_pred <- predict(cnn, newdata = test, type="raw")
+mcr_cnn <- mean(test$Category != cnn_pred)
+```
+
+
+########## DECISION TREES
+
+
+```{r}
+train <- train[, -c(1)]
+test <- test[, -c(1)]
+
+## Define params for tuning
+        dt <- makeClassifTask(
+          data = train, 
+          target = "Category",
+          check.data = FALSE
+        )
+        
+        param_grid_multi <- makeParamSet( 
+          makeDiscreteParam("maxdepth", values=10:15),
+          makeNumericParam("cp", lower = 0.00001, upper = 0.000015),
+          makeDiscreteParam("minsplit", values=c(1:5))
+        )
+
+## Tune function
+params <- tuneParams(
+  learner = "classif.rpart",
+  task = dt,
+  resampling = makeResampleDesc("CV", iters = 3),
+  measures = acc,
+  par.set = param_grid_multi,
+  control = makeTuneControlGrid(),
+  show.info = TRUE
+)
+
+best = setHyperPars(
+  makeLearner("classif.rpart", predict.type = "prob"), 
+  par.vals = params$x
+)
+
+final_model = train(best, dt)
+
+dt.test <- makeClassifTask(
+  data=test, 
+  target = "Category",
+  check.data = FALSE
+)
+
+# Predicting the best Model
+results <- predict(final_model, task = dt.test)$data
+dt_acc <- accuracy(results$truth, results$response)
+```
+
+
+
+```{r, fig.width=12, fig.height=6}
+best_tree = rpart(Category ~ .,
+                data = train, 
+               method = 'class',
+               control = c(maxdepth = best$par.vals$maxdepth, cp=best$par.vals$cp, minsplit=best$par.vals$minsplit))
+rpart.plot(best_tree, tweak = 1)
+```
+
+```{}
+tree5 = rpart(Category ~ .,
+               data = train, 
+               method = 'class',
+               control = c(maxdepth = 5))
+rpart.plot(best_tree, tweak = 1)
+```
+
+```{r}
+plot(varImp(rf))
+```
+
+
+
+
+
+```{}
+## takes forever to train
+
+svmR <- caret::train(Category ~ .,
+              data=train,
+             method="svmRadial",
+             trControl=trainControl("cv", number=5),
+             tuneGrid=expand.grid(C=c(1,10),
+                                 sigma=c(0.01, 0.1, 1)))
+svmR
+```
+
+
+```{r, echo = F,warning = F, message =F}
+library(pROC)
+
+data$Category <- factor(data$Category)
+train$Category <- factor(train$Category)
+test$Category <- factor(test$Category)
+
+cnn_pred <- factor(cnn_pred, levels = levels(test$Category))
+results$truth <- factor(results$truth, levels = levels(test$Category))
+results$response <- factor(results$response, levels = levels(test$Category))
+rf_pred <- factor(rf_pred, levels = levels(test$Category))
+enet_pred <- factor(enet_pred, levels = levels(test$Category))
+# svmR_pred <- factor(svmR_pred, levels = levels(test$Category))
+
+conf_mat_cnn <- confusionMatrix(cnn_pred, test$Category)
+conf_mat_dt <- confusionMatrix(results$truth, results$response)
+conf_mat_rf <- confusionMatrix(rf_pred, test$Category)
+conf_mat_enet <- confusionMatrix(enet_pred,test$Category)
+# conf_mat_svmR <- confusionMatrix(svmR_pred, test$Category)
+
+precision_cnn <- mean(conf_mat_cnn$byClass[, "Precision"])
+recall_cnn <- mean(conf_mat_cnn$byClass[, "Recall"])
+f1_cnn <- mean(conf_mat_cnn$byClass[, "F1"])
+
+precision_dt <- mean(conf_mat_dt$byClass[, "Precision"])
+recall_dt <- mean(conf_mat_dt$byClass[, "Recall"])
+f1_dt <- mean(conf_mat_dt$byClass[, "F1"])
+
+precision_rf <- mean(conf_mat_rf$byClass[, "Precision"])
+recall_rf <- mean(conf_mat_rf$byClass[, "Recall"])
+f1_rf <- mean(conf_mat_rf$byClass[, "F1"])
+
+precision_enet <- mean(conf_mat_enet$byClass[, "Precision"])
+recall_enet <- mean(conf_mat_enet$byClass[, "Recall"])
+f1_enet <- mean(conf_mat_enet$byClass[ , "F1"])
+
+# precision_svmR <- mean(conf_mat_svmR$byClass[, "Precision"])
+# recall_svmR <- mean(conf_mat_svmR$byClass[, "Recall"])
+# f1_svmR <- mean(conf_mat_svmR$byClass[, "F1"])
+
+
+```
+
+
+```{r, echo = F,warning = F, message =F}
+table <- data.frame(Model = c("Elastic Net", "Random Forests", "Neural Networks", "Decision Trees"),
+                    Accuracy = c(1-mcr_enet, 1-mcr_rf, 1-mcr_cnn, dt_acc),
+                    MCR = c(mcr_enet, mcr_rf, mcr_cnn, 1-dt_acc),
+                    Precision = c(precision_enet, precision_rf, precision_cnn,precision_dt),
+                    Recall = c(recall_enet, recall_rf, recall_cnn, recall_dt),
+                    F1 = c(f1_enet, f1_rf, f1_cnn, f1_dt))
+
+library(kableExtra)
+
+kable(table, table.attr = "style='width:70%;'") %>%
+  kableExtra::kable_classic(html_font = "Cambria")
+```
+
+
+
+
+
+```{}
+library(neuralnet)
+training.set <- train %>% sample_frac(0.001)
+
+# Define the formula
+formula <- Category ~ StateAbbr + Age + Gender + MaritalStatus + Veteran + NumberInHousehold + AnnualIncome + AllowedIncome + AllowedAssets + IncomeMultiplier + Race
+
+# Train the neural network model
+# Define the neural network architecture
+nn <- neuralnet(Category ~ ., data = train, hidden = c(5, 3))
+
+table <- data.frame(Model = c("Elastic Net", "Random Forests", "Neural Networks", "Support Vector Machine", "Decision Trees"),
+                    Accuracy = c(1-mcr_enet, 1-mcr_rf, 1-mcr_cnn, 1-mcr_svmR, dt_acc),
+                    MCR = c(mcr_enet, mcr_rf, mcr_cnn, mcr_svmR, 1-dt_acc),
+                    Precision = c(precision_enet, precision_rf, precision_cnn, precision_svmR, precision_dt),
+                    Recall = c(recall_enet, recall_rf, recall_cnn, recall_svmR, recall_dt),
+                    F1 = c(f1_enet, f1_rf, f1_cnn, f1_svmR, f1_dt))
+
+kable(table, align = c("l", rep("c", 5)), booktabs = TRUE, digits = 4, space = "5mm")
+
+```
+
+```{}
+### PLOT ACCURACY OF DECISION TREE
+library(plotly)
+plot_result <- generateHyperParsEffectData(params, partial.dep = TRUE)
+
+# Sampling just for visualization
+samp <- plot_result$data %>%
+  sample_n(180)
+
+plot3d <- plot_ly(samp, 
+               x = ~cp, 
+               y = ~maxdepth, 
+               z = ~minsplit,
+               marker = list(color = ~acc.test.mean,  colorscale = list(c(0, 1), c("darkred", "darkgreen")), showscale = TRUE))
+plot3d <- plot3d %>% add_markers()
+plot3d
 ```
 
