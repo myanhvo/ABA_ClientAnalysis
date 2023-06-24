@@ -1,7 +1,7 @@
 <h1 align="center"> Enhancing Customer Experience in the Legal Services Industry: Leveraging ABA's Raw Data for Predictive Analysis
 
 
-<h2 align="center">  Abstract:
+<h2 align="center">  Abstract: </h2>
 
  
 The purpose of this study is to uncover trends and evaluate customer satisfaction with the American Bar Association’s pro bono legal services across the United States via an online platform. The platform allows state-based low-income status people to seek legal advice by posting legal questions and receiving assistance from volunteer lawyers. By analyzing customer demographics, question categories, sentiment analysis, and factors influencing frequently asked questions of this service, we employ advanced machine learning techniques, including elastic net, random forests, and neural networks, to build a robust classification model. This model helps predict the most popular question categories based on key predictor variables while assessing a few drawbacks that occurred. Our research highlights the critical role of effective communication and expertise in maximizing client satisfaction and offers valuable recommendations for enhancing law firm services based on our machine learning model.
