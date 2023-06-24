@@ -6,14 +6,11 @@
  
 The purpose of this study is to uncover trends and evaluate customer satisfaction with the American Bar Association’s pro bono legal services across the United States via an online platform. The platform allows state-based low-income status people to seek legal advice by posting legal questions and receiving assistance from volunteer lawyers. By analyzing customer demographics, question categories, sentiment analysis, and factors influencing frequently asked questions of this service, we employ advanced machine learning techniques, including elastic net, random forests, and neural networks, to build a robust classification model. This model helps predict the most popular question categories based on key predictor variables while assessing a few drawbacks that occurred. Our research highlights the critical role of effective communication and expertise in maximizing client satisfaction and offers valuable recommendations for enhancing law firm services based on our machine learning model.
 
-  <hr>
+ <hr>
   
  
 
 ### 1.  BACKGROUND AND INTRODUCTION
-    
-
-  
 
 In this study, our objective is to analyze the provided data to identify patterns and trends in client-lawyer conversations that can inform the ABA's advice to state partners, facilitate the creation of resources tailored to identified patterns, and devise outreach strategies to effectively engage potential users and volunteers. We aim to enhance the connection between lawyers and clients, promoting effective communication by utilizing similar language, understanding the cultural, societal, and emotional context of clients' messages, and facilitating active listening and engagement.  
 
@@ -39,7 +36,7 @@ Our dataset consists of real conversations between lawyers and clients from the 
 ![](https://lh3.googleusercontent.com/DP8E2-A8Ns9UDh_Elebf0odExbsGLCXYsoo-kkuBCNcmMe4sJ963-LHdlNjyDfDGIOWucrmJ-3OlJbt_CFRTWfqr7KyN-UV6K9UrkQJyvDb-qvvXNiViYatXgKpc6eWf8SOhOAKj28ylAvfQ2L5qgW8)![](https://lh5.googleusercontent.com/NTNYZbDMp1LWVtDacG_EoK_Cmzmcp1ziVoVXcOtFPRa_C8wZL5D6gut57L6yNsBfKbUDqcbjiitl8oeu4I0FK8Y5V6xBhAzg2enYMy8xIMC2IDU7T8KYKNYGSOxzfgYv3pc_2p1c4dkUN9GBALWlfAM)  
 
 
-#### Figure 1: (From left to right) Sentiment scores displayed for 3 out of 11 categories: Family and Children, Individual Rights, and Work, Employment, and Unemployment.
+#### Figure 1: (From top to bottom) Sentiment scores displayed for 3 out of 11 categories: Family and Children, Individual Rights, and Work, Employment, and Unemployment.
 
 Chats and phone calls history between ABA agents and clients were recorded. Based on the conversations, sentiment analysis was performed on eleven specific conversation categories within the ABA, revealing eight sentiment score groups. Trust consistently received the highest score, surpassing the second-highest sentiment by 50%. High anticipation was observed across all categories. Among the three prominent categories (Family and Children, Individual Rights, and Health and Disability), Family and Children showed a significantly low sadness sentiment, while Health and Disability displayed the highest sadness sentiment score. Surprisingly, the Individual Rights category exhibited elevated levels of fear and anger, suggesting concerns regarding the quality of services provided.
 
